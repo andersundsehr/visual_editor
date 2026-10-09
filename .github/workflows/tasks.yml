@@ -42,7 +42,17 @@ jobs:
       - run: composer update --with typo3/cms-core:^${{ matrix.typo3 }}
       - run: ln -sfn phpstan-baseline-${{ matrix.typo3 }}.neon phpstan-baseline.neon
       - run: bash tests/typo3-svg-sanitizer.sh
-      - run: ./vendor/bin/grumphp run --ansi
+      - name: Run all static checks
+        shell: bash
+        run: |
+          set -o pipefail
+          ./vendor/bin/grumphp run --no-ansi 2>&1 | tee /tmp/php85-grumphp.log
+      - name: Report failed static checks
+        if: failure()
+        run: |
+          if [ -f /tmp/php85-grumphp.log ]; then
+            php -r '$s=file_get_contents("/tmp/php85-grumphp.log"); echo "::error::".str_replace(["%", "\r", "\n"], ["%25", "%0D", "%0A"], substr($s, -5000))."\n";'
+          fi
 
   unit-tests:
     name: "unit php: ${{ matrix.php }} TYPO3: ${{ matrix.typo3 }}"
