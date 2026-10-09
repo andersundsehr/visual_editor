@@ -37,8 +37,22 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
       - uses: actions/checkout@v6
+      # CI-only alias until TYPO3 accepts the security-fixed svg-sanitize ^1.0.
+      - run: composer require "enshrined/svg-sanitize:1.0.0 as 0.22.99" --dev --no-update --sort-packages --no-interaction
       - run: composer update --with typo3/cms-core:^${{ matrix.typo3 }}
-      - run: ./vendor/bin/grumphp run --ansi
+      - run: ln -sfn phpstan-baseline-${{ matrix.typo3 }}.neon phpstan-baseline.neon
+      - run: bash tests/typo3-svg-sanitizer.sh
+      - name: Run all static checks
+        shell: bash
+        run: |
+          set -o pipefail
+          ./vendor/bin/grumphp run --no-ansi 2>&1 | tee /tmp/php85-grumphp.log
+      - name: Report failed static checks
+        if: failure()
+        run: |
+          if [ -f /tmp/php85-grumphp.log ]; then
+            php -r '$s=file_get_contents("/tmp/php85-grumphp.log"); echo "::error::".str_replace(["%", "\r", "\n"], ["%25", "%0D", "%0A"], substr($s, -5000))."\n";'
+          fi
 
   unit-tests:
     name: "unit php: ${{ matrix.php }} TYPO3: ${{ matrix.typo3 }}"
@@ -54,6 +68,8 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
       - uses: actions/checkout@v6
+      # CI-only alias until TYPO3 accepts the security-fixed svg-sanitize ^1.0.
+      - run: composer require "enshrined/svg-sanitize:1.0.0 as 0.22.99" --dev --no-update --sort-packages --no-interaction
       - run: composer update --with typo3/cms-core:^${{ matrix.typo3 }}
       - run: CI=true ./Build/Scripts/runTests.sh -p ${{ matrix.php }} -s unit
 
@@ -72,6 +88,8 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
       - uses: actions/checkout@v6
+      # CI-only alias until TYPO3 accepts the security-fixed svg-sanitize ^1.0.
+      - run: composer require "enshrined/svg-sanitize:1.0.0 as 0.22.99" --dev --no-update --sort-packages --no-interaction
       - run: composer update --with typo3/cms-core:^${{ matrix.typo3 }}
       - run: CI=true ./Build/Scripts/runTests.sh -p ${{ matrix.php }} -d ${{ matrix.dbms }} -s functional
 

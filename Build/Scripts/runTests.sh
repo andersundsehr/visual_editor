@@ -98,7 +98,7 @@ Usage: $0 [options] [phpunit args]
 Options:
   -s <unit|functional>    Test suite to run
   -b <docker|podman>      Container runtime
-  -p <8.2|8.3|8.4|8.5>    PHP version (default: 8.2)
+  -p <8.2|8.3|8.4|8.5>    PHP version (default: 8.5)
   -d <sqlite|mariadb|mysql|postgres>
                           Functional DBMS (default: sqlite)
   -a <mysqli|pdo_mysql>   DB driver for mysql/mariadb
@@ -127,7 +127,7 @@ CORE_ROOT="${PWD}"
 TEST_SUITE="help"
 DBMS="sqlite"
 DBMS_VERSION=""
-PHP_VERSION="8.2"
+PHP_VERSION="8.5"
 PHP_XDEBUG_ON=0
 PHP_XDEBUG_PORT=9003
 DATABASE_DRIVER=""
