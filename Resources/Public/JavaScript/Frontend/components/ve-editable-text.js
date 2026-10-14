@@ -636,6 +636,8 @@ export class VeEditableText extends LitElement {
       margin: -4px;
       outline: 2px solid transparent;
       outline-offset: 0;
+      /* white halo outside the ring keeps it visible on dark and colored pages, changed bar on the left */
+      box-shadow: var(--ve-field-halo, 0 0 #0000), var(--ve-field-bar, 0 0 #0000);
 
       transition: outline-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 
@@ -654,11 +656,13 @@ export class VeEditableText extends LitElement {
     .slot.highlighted {
       outline-color: var(--ve-accent, #5432fe);
       background-color: color-mix(in srgb, var(--ve-accent, #5432fe) 12%, transparent);
+      --ve-field-halo: 0 0 0 4px #fff;
     }
 
     .slot.empty {
-      outline-style: solid;
-      outline-color: color-mix(in srgb, var(--ve-accent, #5432fe) 10%, transparent);
+      outline-style: dotted;
+      outline-color: var(--ve-accent, #5432fe);
+      --ve-field-halo: 0 0 0 3px #fff;
       background-color: color-mix(in srgb, var(--ve-accent, #5432fe) 4%, transparent);
       background-image: repeating-linear-gradient(
         135deg,
@@ -674,7 +678,7 @@ export class VeEditableText extends LitElement {
 
     .slot.changed {
       background-color: color-mix(in srgb, var(--ve-success, #3b9e3b) 10%, transparent);
-      box-shadow: inset 3px 0 0 var(--ve-success, #3b9e3b);
+      --ve-field-bar: inset 3px 0 0 var(--ve-success, #3b9e3b);
     }
 
     .slot.invalid {
