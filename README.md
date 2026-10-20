@@ -58,6 +58,12 @@ to all locations that should be editable:
 ### Text/RichText Fields
 Replace the output of your texts with the `f:render.text` ViewHelper.
 
+When TYPO3 provides `BeforeRenderTextEvent`, the Visual Editor uses the Core
+ViewHelper and supplies its editable result through an event listener.
+Older TYPO3 versions use a compatibility ViewHelper with the same rendering
+service. Both paths preserve the result's `name`, `html`, `isEmpty`, and `value`
+metadata.
+
 - record is already a [Record](https://docs.typo3.org/permalink/t3coreapi:record-objects) object:
 ````html
 before:

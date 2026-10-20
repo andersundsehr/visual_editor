@@ -1,0 +1,27 @@
+<?php
+
+namespace TYPO3\CMS\Fluid\Event;
+
+use Psr\Http\Message\ServerRequestInterface;
+use TYPO3\CMS\Core\Domain\RecordInterface;
+use TYPO3\CMS\Core\Schema\Field\InputFieldType;
+use TYPO3\CMS\Core\Schema\Field\TextFieldType;
+use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3Fluid\Fluid\Core\Parser\UnsafeHTML;
+
+/**
+ * Static analysis fallback for TYPO3 versions without BeforeRenderTextEvent.
+ * The legacy ViewHelper handles rendering on those versions.
+ */
+abstract class BeforeRenderTextEvent
+{
+    abstract public function getRecord(): RecordInterface|DomainObjectInterface;
+
+    abstract public function getFieldSchema(): InputFieldType|TextFieldType;
+
+    abstract public function getValue(): string;
+
+    abstract public function getRequest(): ?ServerRequestInterface;
+
+    abstract public function setRenderedText(UnsafeHTML $renderedText): void;
+}
