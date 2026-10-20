@@ -6,9 +6,14 @@ defined('TYPO3') || die('TYPO3 not defined.');
 
 use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
 use TYPO3\CMS\Fluid\Event\ModifyRenderedContentAreaEvent;
+use TYPO3\CMS\Fluid\Event\BeforeRenderTextEvent;
 use TYPO3\CMS\VisualEditor\BackwardsCompatibility\Event\RenderContentAreaEvent as V13_RenderContentAreaEvent;
 
 $GLOBALS['TYPO3_CONF_VARS']['SYS']['fluid']['namespaces']['f'][] = 'TYPO3\\CMS\\VisualEditor\\ViewHelpers';
+
+if (!class_exists(BeforeRenderTextEvent::class)) {
+    $GLOBALS['TYPO3_CONF_VARS']['SYS']['fluid']['namespaces']['f'][] = 'TYPO3\\CMS\\VisualEditor\\BackwardsCompatibility\\ViewHelpers';
+}
 
 ExtensionManagementUtility::addTypoScriptSetup("@import 'EXT:visual_editor/Configuration/TypoScript/setup.typoscript'");
 

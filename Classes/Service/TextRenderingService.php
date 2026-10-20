@@ -2,39 +2,28 @@
 
 declare(strict_types=1);
 
-namespace TYPO3\CMS\VisualEditor\ViewHelpers\Render;
+namespace TYPO3\CMS\VisualEditor\Service;
 
-use InvalidArgumentException;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Core\Configuration\Richtext as RichtextConfiguration;
-use TYPO3\CMS\Core\Domain\Exception\RecordPropertyNotFoundException;
-use TYPO3\CMS\Core\Domain\RecordFactory;
 use TYPO3\CMS\Core\Domain\RecordInterface;
 use TYPO3\CMS\Core\Html\RteHtmlParser;
 use TYPO3\CMS\Core\Http\ApplicationType;
-use TYPO3\CMS\Core\Information\Typo3Version;
 use TYPO3\CMS\Core\Page\AssetCollector;
 use TYPO3\CMS\Core\Schema\Field\InputFieldType;
 use TYPO3\CMS\Core\Schema\Field\TextFieldType;
 use TYPO3\CMS\Core\Schema\TcaSchemaFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
-use TYPO3\CMS\Extbase\DomainObject\DomainObjectInterface;
+use TYPO3\CMS\Fluid\Core\Rendering\RenderingContextFactory;
 use TYPO3\CMS\Fluid\ViewHelpers\Format\HtmlViewHelper as FormatHtmlViewHelper;
 use TYPO3\CMS\Fluid\ViewHelpers\Sanitize\HtmlViewHelper as SanitizeHtmlViewHelper;
 use TYPO3\CMS\Fluid\ViewHelpers\Transform\HtmlViewHelper as TransformHtmlViewHelper;
-use TYPO3\CMS\Frontend\Page\PageInformation;
 use TYPO3\CMS\VisualEditor\Core\RichtText\RichTextConfigurationService;
 use TYPO3\CMS\VisualEditor\Core\RichtText\RichTextConfigurationServiceDto;
 use TYPO3\CMS\VisualEditor\EditableResult\Input;
 use TYPO3\CMS\VisualEditor\EditableResult\RichText;
-use TYPO3\CMS\VisualEditor\Service\EditModeService;
-use TYPO3\CMS\VisualEditor\Service\LocalizationService;
-use TYPO3\CMS\VisualEditor\Service\ModelToRawRecordService;
-use TYPO3Fluid\Fluid\Core\ViewHelper\AbstractViewHelper;
-use TYPO3Fluid\Fluid\Core\ViewHelper\InvalidArgumentValueException;
 use TYPO3Fluid\Fluid\Core\ViewHelper\TagBuilder;
 
-use function get_debug_type;
 use function htmlspecialchars;
 use function is_int;
 use function is_string;
@@ -44,134 +33,38 @@ use function str_replace;
 
 use const JSON_THROW_ON_ERROR;
 
-/**
- * ViewHelper to render content based on records and fields from a TCA schema.
- * Handles the processing of both simple and rich text fields.
- *
- * ````html
- *   <f:render.text record="{page}" field="bodytext" />
- *   {record -> f:render.text(field: 'title')}
- *   <f:render.text field="subheader">{record}</f:render.text>
- * ````
- */
-final class TextViewHelper extends AbstractViewHelper
+final readonly class TextRenderingService
 {
-    private const RECORD_TYPE = RecordInterface::class . '|' . PageInformation::class . '|' . DomainObjectInterface::class;
-
-    /**
-     * Extbase models have a __toString() method and Fluid calls that if we escape the Children (arguments)
-     */
-    protected $escapeChildren = false;
-
-    protected $escapeOutput = false;
-
     public function __construct(
-        private readonly EditModeService $editModeService,
-        private readonly RecordFactory $recordFactory,
-        private readonly TcaSchemaFactory $tcaSchema,
-        private readonly RteHtmlParser $rteHtmlParser,
-        private readonly AssetCollector $assetCollector,
-        private readonly RichTextConfigurationService $richTextConfigurationService,
-        private readonly RichtextConfiguration $richtext,
-        private readonly Typo3Version $typo3Version,
-        private readonly LocalizationService $localizationService,
-        private readonly ModelToRawRecordService $modelToRawRecordService,
+        private EditModeService $editModeService,
+        private TcaSchemaFactory $tcaSchema,
+        private RteHtmlParser $rteHtmlParser,
+        private AssetCollector $assetCollector,
+        private RichTextConfigurationService $richTextConfigurationService,
+        private RichtextConfiguration $richtext,
+        private LocalizationService $localizationService,
+        private RenderingContextFactory $renderingContextFactory,
     ) {
     }
 
-    public function initializeArguments(): void
-    {
-        parent::initializeArguments();
-
-        $type = 'object';
-        // can not always use DI here because fluid initializes the class without DI. and calls initializeArguments.
-        $typo3Version = $this->typo3Version ?? GeneralUtility::makeInstance(Typo3Version::class);
-        if ($typo3Version->getMajorVersion() >= 14) {
-            $type = self::RECORD_TYPE;
-        }
-
-        $this->registerArgument('record', $type, 'A Record API Object (field is also needed)');
-        $this->registerArgument('field', 'string', 'the field that should be rendered', true);
-        $this->registerArgument('optional', 'boolean', 'If the provided field does not exist in the record, null will be returned.', false, false);
-    }
-
-    public function getContentArgumentName(): string
-    {
-        return 'record';
-    }
-
-    public function render(): Input|RichText|null
-    {
-        $renderingContext = $this->renderingContext ?? throw new InvalidArgumentException('$this->renderingContext is not available', 1772464146);
-        $request = $renderingContext->getAttribute(ServerRequestInterface::class);
+    public function render(
+        string $value,
+        RecordInterface $record,
+        InputFieldType|TextFieldType $fieldSchema,
+        ServerRequestInterface $request,
+    ): Input|RichText {
         $this->editModeService->init($request);
-
-        $record = $this->renderChildren();
-        $field = $this->arguments['field'];
-
-        if ($record instanceof PageInformation) {
-            $record = $this->recordFactory->createResolvedRecordFromDatabaseRow('pages', $record->getPageRecord());
-        }
-
-        if ($record instanceof DomainObjectInterface) {
-            $record = $this->modelToRawRecordService->modelToRawRecord($record);
-        }
-
-        if (!$record instanceof RecordInterface) {
-            throw new InvalidArgumentException(
-                'The record argument must be an instance of ' . self::RECORD_TYPE . '. Given: ' . get_debug_type(
-                    $record,
-                ),
-                1770539910,
-            );
-        }
-
-        try {
-            $value = $record->get($field) ?? '';
-        } catch (RecordPropertyNotFoundException $recordPropertyNotFoundException) {
-            if ($this->arguments['optional']) {
-                return null;
-            }
-
-            throw new InvalidArgumentValueException(
-                'The field "' . $field . '" does not exist in the given record `' . $record->getFullType() . '`.',
-                1775554099,
-                $recordPropertyNotFoundException,
-            );
-        }
-
-        if (!is_string($value)) {
-            $table = $record->getMainType();
-            throw new InvalidArgumentException(
-                'The value of the field "' . $table . '.' . $field . '" must be a string. Given: ' . get_debug_type($value),
-                1770321858,
-            );
-        }
-
-        $canEdit = $this->editModeService->canEditField($record, $field, $request);
+        $canEdit = $this->editModeService->canEditField($record, $fieldSchema->getName(), $request);
 
         $schema = $this->tcaSchema->get($record->getFullType());
         $tableLabel = $schema->getTitle($this->localizationService->tryTranslation(...));
+        $label = $tableLabel . ': ' . $this->localizationService->tryTranslation($fieldSchema->getLabel());
 
-        $fieldSchema = $schema->getField($field);
-        $label = $this->localizationService->tryTranslation($fieldSchema->getLabel());
-
-        $label = $tableLabel . ': ' . $label;
-
-        if ($fieldSchema instanceof InputFieldType) {
-            return $this->renderInput($value, $record, $fieldSchema, $label, $canEdit);
+        if ($fieldSchema instanceof InputFieldType || !$fieldSchema->isRichText()) {
+            return $this->renderInput($value, $record, $fieldSchema, $label, $canEdit, $fieldSchema instanceof TextFieldType);
         }
 
-        if ($fieldSchema instanceof TextFieldType) {
-            if (!$fieldSchema->isRichText()) {
-                return $this->renderInput($value, $record, $fieldSchema, $label, $canEdit, true);
-            }
-
-            return $this->renderRichText($value, $record, $fieldSchema, $label, $canEdit, $request);
-        }
-
-        $table = $record->getMainType();
-        throw new InvalidArgumentException('The field "' . $table . '.' . $field . '" is not supported. Given: ' . get_debug_type($fieldSchema), 1770618219);
+        return $this->renderRichText($value, $record, $fieldSchema, $label, $canEdit, $request);
     }
 
     private function renderInput(
@@ -260,7 +153,7 @@ final class TextViewHelper extends AbstractViewHelper
     private function renderRichText(string $value, RecordInterface $record, TextFieldType $field, string $label, bool $editMode, ServerRequestInterface $request): RichText
     {
         if (!$editMode) {
-            $renderingContext = $this->renderingContext ?? throw new InvalidArgumentException('$this->renderingContext is not available', 1772464098);
+            $renderingContext = $this->renderingContextFactory->create([], $request);
 
             $isBackendRequest = ApplicationType::fromRequest($request)->isBackend();
             if (!$isBackendRequest) {
