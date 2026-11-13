@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+namespace TYPO3\CMS\VisualEditor\EventListener;
+
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use TYPO3\CMS\Core\Attribute\AsEventListener;
+use TYPO3\CMS\Core\Domain\Access\RecordAccessGrantedEvent;
+use TYPO3\CMS\Core\Schema\Capability\TcaSchemaCapability;
+use TYPO3\CMS\Core\Schema\TcaSchemaFactory;
+use TYPO3\CMS\VisualEditor\Context\EditModeAspect;
+
+/**
+ * Shows hidden content elements in edit mode in RecordAccessVoter::accessGranted(), which is used
+ * e.g. by PageRepository::versionOL() in a workspace preview of TYPO3 v14.
+ *
+ * The voter checks the record without its hidden flag, so starttime, endtime and the user groups still apply.
+ * All other tables keep the behavior of the core.
+ */
+#[AsEventListener('visual-editor/show-hidden-content-elements-in-record-access')]
+#[Autoconfigure(public: true)]
+final readonly class RecordAccessGrantedEventListener
+{
+    public function __construct(
+        private TcaSchemaFactory $tcaSchemaFactory,
+    ) {
+    }
+
+    public function __invoke(RecordAccessGrantedEvent $event): void
+    {
+        if ($event->getTable() !== 'tt_content' || !EditModeAspect::isEditMode($event->getContext())) {
+            return;
+        }
+
+        $schema = $this->tcaSchemaFactory->get('tt_content');
+        if (!$schema->hasCapability(TcaSchemaCapability::RestrictionDisabledField)) {
+            return;
+        }
+
+        $hiddenFieldName = $schema->getCapability(TcaSchemaCapability::RestrictionDisabledField)->getFieldName();
+        $record = $event->getRecord();
+        if (!(bool)($record[$hiddenFieldName] ?? false)) {
+            return;
+        }
+
+        $record[$hiddenFieldName] = 0;
+        $event->updateRecord($record);
+    }
+}
