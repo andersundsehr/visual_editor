@@ -6,7 +6,9 @@ namespace TYPO3\CMS\VisualEditor\Service;
 
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use TYPO3\CMS\Core\Authentication\BackendUserAuthentication;
+use TYPO3\CMS\Core\Context\Context;
 use TYPO3\CMS\Core\Domain\Record;
 use TYPO3\CMS\Core\Domain\RecordInterface;
 use TYPO3\CMS\Core\FormProtection\FormProtectionFactory;
@@ -18,9 +20,11 @@ use TYPO3\CMS\Core\Schema\Capability\TcaSchemaCapability;
 use TYPO3\CMS\Core\Schema\TcaSchemaFactory;
 use TYPO3\CMS\Core\Site\Entity\SiteLanguage;
 use TYPO3\CMS\Frontend\Page\PageInformation;
+use TYPO3\CMS\VisualEditor\Context\EditModeAspect;
 
 use function method_exists;
 
+#[Autoconfigure(public: true)]
 final readonly class EditModeService
 {
     public function __construct(
@@ -34,11 +38,18 @@ final readonly class EditModeService
         private Typo3Version $typo3Version,
         private AllowedOriginService $allowedOriginService,
         private UrlGenerationService $urlGenerationService,
+        private Context $context,
     ) {
     }
 
     public function isEditMode(ServerRequestInterface $request): bool
     {
+        // While the EditModeMiddleware handles the request, it has decided about the edit mode.
+        if ($this->context->hasAspect(EditModeAspect::IDENTIFIER)) {
+            return EditModeAspect::isEditMode($this->context);
+        }
+
+        // Before or after the EditModeMiddleware, e.g. in earlier middlewares or in CSP events of the response.
         $queryParams = $request->getQueryParams();
 
         if (!isset($queryParams['editMode'])) {
